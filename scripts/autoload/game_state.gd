@@ -43,6 +43,9 @@ var current_map: Array = []
 
 ## 当前所在节点
 var current_node = null
+
+## 地图噪声种子（用于节点位置偏移）
+var map_noise_seed: int = 0
 #endregion
 
 
@@ -91,4 +94,5 @@ func reset_player() -> void:
 	relics.clear()
 	current_map.clear()
 	current_node = null
+	map_noise_seed = 0
 	_init_starter_deck()

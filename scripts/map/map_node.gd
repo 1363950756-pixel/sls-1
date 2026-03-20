@@ -3,7 +3,7 @@
 class_name MapNode extends RefCounted
 
 ## 节点类型
-enum Type { START, BATTLE, REST, BOSS, SHOP, ELITE }
+enum Type { START, BATTLE, REST, BOSS, SHOP, ELITE, EVENT }
 
 var type: int = Type.BATTLE
 var row: int = 0

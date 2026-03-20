@@ -59,11 +59,13 @@ static func _pick_type(r: int) -> int:
 
 	var roll := randf()
 	var result: int
-	if roll < 0.50:
+	if roll < 0.45:
 		result = MapNode.Type.BATTLE
-	elif roll < 0.65:
+	elif roll < 0.60:
+		result = MapNode.Type.EVENT
+	elif roll < 0.75:
 		result = MapNode.Type.ELITE
-	elif roll < 0.80:
+	elif roll < 0.90:
 		result = MapNode.Type.SHOP
 	else:
 		result = MapNode.Type.REST
