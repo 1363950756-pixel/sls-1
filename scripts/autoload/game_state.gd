@@ -38,11 +38,11 @@ var current_floor: int = 0
 ## 遗物列表
 var relics: Array = []
 
-## 当前地图（二维数组）
-var current_map: Array[Array] = []
+## 当前地图
+var current_map: Array = []
 
 ## 当前所在节点
-var current_node: MapNode = null
+var current_node = null
 #endregion
 
 

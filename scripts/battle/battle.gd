@@ -115,6 +115,24 @@ func _setup_ui() -> void:
 	end_turn_button.text = "结束回合"
 	add_child(end_turn_button)
 
+	# 调试按钮：秒杀敌人
+	var debug_kill_btn := Button.new()
+	debug_kill_btn.position = Vector2(10, screen_size.y - 60)
+	debug_kill_btn.custom_minimum_size = Vector2(80, 30)
+	debug_kill_btn.text = "秒杀[调试]"
+	debug_kill_btn.add_theme_color_override("font_color", Color.RED)
+	debug_kill_btn.pressed.connect(_debug_kill_all_enemies)
+	add_child(debug_kill_btn)
+
+	# 调试按钮：跳过战斗
+	var debug_skip_btn := Button.new()
+	debug_skip_btn.position = Vector2(100, screen_size.y - 60)
+	debug_skip_btn.custom_minimum_size = Vector2(80, 30)
+	debug_skip_btn.text = "跳过[调试]"
+	debug_skip_btn.add_theme_color_override("font_color", Color.RED)
+	debug_skip_btn.pressed.connect(_debug_skip_battle)
+	add_child(debug_skip_btn)
+
 
 ## 连接信号
 func _connect_signals() -> void:
@@ -235,6 +253,10 @@ func _on_battle_victory() -> void:
 	status_label.text = "战斗胜利！"
 	end_turn_button.disabled = true
 
+	# 更新地图节点状态
+	if GameState.current_node:
+		MapGenerator.finish(GameState.current_map, GameState.current_node)
+
 	# 延迟后返回地图
 	await get_tree().create_timer(1.5).timeout
 	get_tree().change_scene_to_file("res://scenes/map.tscn")
@@ -248,3 +270,16 @@ func _on_player_died(_character: Character) -> void:
 	# 延迟后返回主菜单
 	await get_tree().create_timer(1.5).timeout
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+
+
+## 调试：秒杀所有敌人
+func _debug_kill_all_enemies() -> void:
+	for enemy in enemies:
+		if enemy.is_alive():
+			enemy.take_damage(999)
+	status_label.text = "[调试] 秒杀！"
+
+
+## 调试：跳过战斗（直接胜利）
+func _debug_skip_battle() -> void:
+	_on_battle_victory()

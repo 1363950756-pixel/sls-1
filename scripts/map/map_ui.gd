@@ -1,219 +1,232 @@
-## 地图场景UI
-## 显示地图节点，处理节点选择
+## 地图UI - 简化版
 extends Control
 
-## 节点按钮场景（用于显示单个节点）
-const NODE_SIZE := 60
-const NODE_SPACING_X := 100
-const NODE_SPACING_Y := 80
+const NODE_W := 80
+const NODE_H := 60
+const GAP_X := 130
+const GAP_Y := 100
+const COLS := 3
 
-## 当前地图数据
-var map_data: Array[Array] = []
-
-## 当前所在节点
-var current_node: MapNode = null
-
-## 节点UI引用（用于更新显示）
-var node_buttons: Array[Button] = []
-
-## 玩家信息显示
-var player_info_label: Label
-
-## 楼层信息显示
-var floor_label: Label
+var map: Array = []
+var cur: MapNode = null
+var btns: Array = []
+var line_holder: Control
+var scroll: ScrollContainer
+var holder: Control
 
 
 func _ready() -> void:
-	_setup_ui()
-	_init_map()
+	_build_ui()
+	_load_map()
 
 
-func _setup_ui() -> void:
-	var screen_size: Vector2 = get_viewport_rect().size
+func _build_ui() -> void:
+	var sz := get_viewport_rect().size
 
 	# 背景
-	var background := ColorRect.new()
-	background.color = Color(0.05, 0.05, 0.08)
-	background.anchors_preset = Control.PRESET_FULL_RECT
-	add_child(background)
+	var bg := ColorRect.new()
+	bg.color = Color(0.06, 0.06, 0.1)
+	bg.anchors_preset = PRESET_FULL_RECT
+	add_child(bg)
 
-	# 楼层信息
-	floor_label = Label.new()
-	floor_label.position = Vector2(10, 10)
-	floor_label.custom_minimum_size = Vector2(200, 30)
-	floor_label.add_theme_font_size_override("font_size", 18)
-	floor_label.add_theme_color_override("font_color", Color.YELLOW)
-	floor_label.text = "第 %d 层" % GameState.current_floor
-	add_child(floor_label)
+	# 标题
+	var title := Label.new()
+	title.position = Vector2(20, 15)
+	title.text = "地图 - 第 %d 层" % (GameState.current_floor + 1)
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color.GOLD)
+	add_child(title)
 
-	# 玩家信息
-	player_info_label = Label.new()
-	player_info_label.position = Vector2(10, 45)
-	player_info_label.custom_minimum_size = Vector2(200, 60)
-	player_info_label.add_theme_font_size_override("font_size", 14)
-	player_info_label.add_theme_color_override("font_color", Color.WHITE)
-	player_info_label.text = "HP: %d/%d\n金币: %d" % [GameState.current_hp, GameState.max_hp, GameState.gold]
-	add_child(player_info_label)
+	# 状态
+	var info := Label.new()
+	info.position = Vector2(20, 50)
+	info.text = "HP: %d/%d   金币: %d" % [GameState.current_hp, GameState.max_hp, GameState.gold]
+	info.add_theme_font_size_override("font_size", 16)
+	add_child(info)
+
+	# 滚动区
+	scroll = ScrollContainer.new()
+	scroll.position = Vector2(0, 80)
+	scroll.size = Vector2(sz.x, sz.y - 80)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(scroll)
+
+	holder = Control.new()
+	scroll.add_child(holder)
 
 
-func _init_map() -> void:
-	# 如果没有地图数据，生成新地图
-	if map_data.is_empty():
-		map_data = MapGenerator.generate_map()
-		GameState.current_map = map_data
+func _load_map() -> void:
+	# 优先使用已存在的地图
+	if GameState.current_map and GameState.current_map.size() > 0:
+		map = GameState.current_map
+		cur = GameState.current_node
+		print("[MapUI] 加载已有地图，当前节点: row=%d col=%d" % [cur.row if cur else -1, cur.col if cur else -1])
 	else:
-		map_data = GameState.current_map
+		# 首次进入，生成新地图
+		map = MapGenerator.create()
+		GameState.current_map = map
+		cur = MapGenerator.get_start(map)
+		GameState.current_node = cur
+		print("[MapUI] 生成新地图")
 
-	# 如果没有当前位置，设置在起始位置
-	if current_node == null and not map_data.is_empty():
-		# 找到第一个可访问的节点（通常是第一行的中间节点）
-		for node in map_data[0]:
-			if node.is_accessible:
-				current_node = node
-				break
-		# 如果没有可访问的节点，选择第一个节点
-		if current_node == null and not map_data[0].is_empty():
-			current_node = map_data[0][0]
-			current_node.is_accessible = true
-
-	_draw_map()
+	call_deferred("_render")
+	call_deferred("_go_bottom")
 
 
-## 绘制地图
-func _draw_map() -> void:
-	# 清除旧节点
-	for btn in node_buttons:
-		btn.queue_free()
-	node_buttons.clear()
-
-	var screen_size: Vector2 = get_viewport_rect().size
-
-	# 计算地图显示区域
-	var start_x: float = screen_size.x / 2 - (3 * NODE_SPACING_X) / 2
-	var start_y: float = screen_size.y - 150  # 从底部开始
-
-	# 从下往上绘制（row 0 在底部）
-	for row_idx in range(map_data.size()):
-		var row: Array = map_data[row_idx]
-		var row_size: int = row.size()
-
-		for col_idx in range(row_size):
-			var node: MapNode = row[col_idx]
-			var btn := _create_node_button(node, row_size, col_idx, row_idx, start_x, start_y)
-			add_child(btn)
-			node_buttons.append(btn)
-
-	# 绘制连接线
-	_draw_connections(start_x, start_y)
+func _go_bottom() -> void:
+	await get_tree().process_frame
+	var bar := scroll.get_v_scroll_bar()
+	if bar:
+		scroll.scroll_vertical = int(bar.max_value)
 
 
-## 创建节点按钮
-func _create_node_button(node: MapNode, row_size: int, col: int, row: int, start_x: float, start_y: float) -> Button:
-	var btn := Button.new()
+func _render() -> void:
+	# 清理
+	if line_holder:
+		line_holder.queue_free()
+	for b in btns:
+		b.queue_free()
+	btns.clear()
 
-	# 计算位置
-	var row_width: float = (row_size - 1) * NODE_SPACING_X
-	var x: float = start_x + (col * NODE_SPACING_X) - row_width / 2 + NODE_SIZE / 2
-	var y: float = start_y - (row * NODE_SPACING_Y)
+	# 调试：打印节点信息
+	print("=== 地图节点 ===")
+	for layer in map:
+		for n in layer:
+			print("节点 row=%d col=%d type=%d done=%s open=%s" % [n.row, n.col, n.type, n.is_done, n.is_open])
+	print("================")
 
-	btn.position = Vector2(x - NODE_SIZE / 2, y - NODE_SIZE / 2)
-	btn.custom_minimum_size = Vector2(NODE_SIZE, NODE_SIZE)
+	# 内容尺寸
+	var h := float(map.size() + 1) * GAP_Y
+	var w := get_viewport_rect().size.x
+	holder.custom_minimum_size = Vector2(w, h)
 
-	# 设置文字
-	btn.text = node.get_type_name()
-	btn.add_theme_font_size_override("font_size", 10)
+	var cx := w / 2.0
+	var bottom := h - 60.0
 
-	# 根据状态设置样式
-	var style := StyleBoxFlat.new()
-	style.bg_color = node.get_type_color()
-	style.set_corner_radius_all(8)
+	# 先画线
+	_draw_lines(cx, bottom)
 
-	if node.is_completed:
-		style.bg_color = Color(0.3, 0.3, 0.3)
-		style.border_color = Color(0.5, 0.5, 0.5)
-		btn.disabled = true
-	elif node.is_accessible:
-		style.border_color = Color.YELLOW
-		style.set_border_width_all(3)
-	else:
-		style.bg_color = Color(0.2, 0.2, 0.2)
-		btn.disabled = true
-
-	# 当前位置标记
-	if node == current_node:
-		style.border_color = Color.GREEN
-		style.set_border_width_all(4)
-
-	btn.add_theme_stylebox_override("normal", style)
-	btn.add_theme_stylebox_override("disabled", style)
-
-	# 连接点击事件
-	if node.is_accessible and not node.is_completed:
-		btn.pressed.connect(_on_node_pressed.bind(node))
-
-	return btn
+	# 再画节点
+	for layer in map:
+		for n in layer:
+			var pos := _node_pos(n, cx, bottom)
+			_make_btn(n, pos)
 
 
-## 绘制节点连接线
-func _draw_connections(start_x: float, start_y: float) -> void:
-	# 使用 Line2D 绘制连接线
-	for row_idx in range(map_data.size()):
-		var row: Array = map_data[row_idx]
-		for node in row:
-			for next_node in node.connections_next:
-				var line := Line2D.new()
-				line.width = 2.0
+func _node_pos(n: MapNode, cx: float, bottom: float) -> Vector2:
+	var layer_size: int = map[n.row].size()
+	var offset_x: float = (float(layer_size) - 1.0) / 2.0 * GAP_X
+	var x := cx - offset_x + float(n.col) * GAP_X
+	var y := bottom - float(n.row) * GAP_Y
+	return Vector2(x, y)
 
-				# 计算位置
-				var row_width: float = (row.size() - 1) * NODE_SPACING_X
-				var x1: float = start_x + (node.column * NODE_SPACING_X) - row_width / 2
-				var y1: float = start_y - (node.row * NODE_SPACING_Y)
 
-				var next_row_width: float = (map_data[next_node.row].size() - 1) * NODE_SPACING_X
-				var x2: float = start_x + (next_node.column * NODE_SPACING_X) - next_row_width / 2
-				var y2: float = start_y - (next_node.row * NODE_SPACING_Y)
+func _draw_lines(cx: float, bottom: float) -> void:
+	line_holder = Control.new()
+	line_holder.mouse_filter = MOUSE_FILTER_IGNORE
+	holder.add_child(line_holder)
 
-				line.add_point(Vector2(x1, y1))
-				line.add_point(Vector2(x2, y2))
+	for layer in map:
+		for n in layer:
+			var p1 := _node_pos(n, cx, bottom)
+			for nxt in n.next:
+				var p2 := _node_pos(nxt, cx, bottom)
+				var ln := Line2D.new()
+				ln.width = 3.0
+				ln.add_point(p1)
+				ln.add_point(p2)
 
-				# 已完成的路径显示为灰色，可访问的显示为黄色
-				if node.is_completed:
-					line.default_color = Color(0.4, 0.4, 0.4)
-				elif next_node.is_accessible:
-					line.default_color = Color(0.6, 0.5, 0.2)
+				# 根据状态设置颜色
+				if n.is_done:
+					ln.default_color = Color(0.3, 0.55, 0.35)  # 已完成：绿色
+				elif nxt.is_open:
+					ln.default_color = Color(0.85, 0.7, 0.25)  # 可选择：金色
 				else:
-					line.default_color = Color(0.3, 0.3, 0.3)
+					ln.default_color = Color(0.4, 0.4, 0.45)  # 普通连接：灰色
 
-				add_child(line)
-
-
-## 节点被点击
-func _on_node_pressed(node: MapNode) -> void:
-	current_node = node
-	GameState.current_node = node
-
-	# 进入对应场景
-	_enter_node(node)
+				line_holder.add_child(ln)
 
 
-## 进入节点
-func _enter_node(node: MapNode) -> void:
-	match node.node_type:
-		MapNode.NodeType.BATTLE, MapNode.NodeType.ELITE, MapNode.NodeType.BOSS:
+func _make_btn(n: MapNode, pos: Vector2) -> void:
+	var btn := Button.new()
+	btn.position = Vector2(pos.x - NODE_W / 2, pos.y - NODE_H / 2)
+	btn.custom_minimum_size = Vector2(NODE_W, NODE_H)
+	btn.text = _type_name(n.type)
+	btn.add_theme_font_size_override("font_size", 12)
+
+	var st := StyleBoxFlat.new()
+	st.bg_color = _type_color(n.type)
+	st.set_corner_radius_all(8)
+	st.set_border_width_all(2)
+
+	if n.is_done:
+		st.bg_color = Color(0.2, 0.2, 0.2)
+		st.border_color = Color(0.4, 0.4, 0.4)
+		btn.disabled = true
+	elif n.is_open:
+		st.border_color = Color(1, 0.85, 0.3)
+		st.set_border_width_all(3)
+	else:
+		st.bg_color = Color(0.15, 0.15, 0.15)
+		st.border_color = Color(0.35, 0.35, 0.35)
+		btn.disabled = true
+
+	if n == cur:
+		st.border_color = Color(0.3, 1, 0.4)
+		st.set_border_width_all(4)
+
+	btn.add_theme_stylebox_override("normal", st)
+	btn.add_theme_stylebox_override("disabled", st)
+	btn.add_theme_stylebox_override("hover", st)
+	btn.add_theme_stylebox_override("pressed", st)
+
+	if n.is_open and not n.is_done:
+		btn.pressed.connect(_click.bind(n))
+
+	holder.add_child(btn)
+	btns.append(btn)
+
+
+func _type_name(t: int) -> String:
+	match t:
+		MapNode.Type.START: return "起点"
+		MapNode.Type.BATTLE: return "战斗"
+		MapNode.Type.REST: return "休息"
+		MapNode.Type.BOSS: return "Boss"
+		MapNode.Type.SHOP: return "商店"
+		MapNode.Type.ELITE: return "精英"
+		_: return "未知"
+
+
+func _type_color(t: int) -> Color:
+	match t:
+		MapNode.Type.START: return Color(0.9, 0.8, 0.3)
+		MapNode.Type.BATTLE: return Color(0.7, 0.45, 0.3)
+		MapNode.Type.REST: return Color(0.3, 0.6, 0.4)
+		MapNode.Type.BOSS: return Color(0.6, 0.25, 0.5)
+		MapNode.Type.SHOP: return Color(0.3, 0.55, 0.7)
+		MapNode.Type.ELITE: return Color(0.75, 0.35, 0.3)
+		_: return Color(0.5, 0.5, 0.5)
+
+
+func _click(n: MapNode) -> void:
+	cur = n
+	GameState.current_node = n
+
+	match n.type:
+		MapNode.Type.START:
+			MapGenerator.finish(map, n)
+			_render()
+		MapNode.Type.BATTLE, MapNode.Type.ELITE, MapNode.Type.BOSS:
 			get_tree().change_scene_to_file("res://scenes/battle.tscn")
-		MapNode.NodeType.SHOP:
-			# TODO: 商店场景
-			print("进入商店（未实现）")
-		MapNode.NodeType.REST:
-			# 休息点：恢复30%血量
-			var heal_amount := int(GameState.max_hp * 0.3)
-			GameState.player_heal(heal_amount)
-			print("在休息点恢复了 %d 点血量" % heal_amount)
-			# 标记完成并更新地图
-			node.is_completed = true
-			MapGenerator.update_accessible_nodes(map_data, node)
-			# 重新绘制
-			_draw_map()
+		MapNode.Type.REST:
+			var heal := int(GameState.max_hp * 0.3)
+			GameState.player_heal(heal)
+			MapGenerator.finish(map, n)
+			_render()
+		MapNode.Type.SHOP:
+			print("商店功能待实现")
+			MapGenerator.finish(map, n)
+			_render()
 		_:
-			# 未知类型，当作普通战斗
 			get_tree().change_scene_to_file("res://scenes/battle.tscn")
