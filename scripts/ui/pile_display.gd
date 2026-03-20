@@ -7,6 +7,9 @@ enum PileType { DRAW, DISCARD }
 
 @export var pile_type: PileType = PileType.DRAW
 
+## 战斗状态
+var battle_state: BattleState
+
 ## 背景和标签
 var background: ColorRect
 var count_label: Label
@@ -21,10 +24,18 @@ var is_popup_visible: bool = false
 func _ready() -> void:
 	_setup_ui()
 	_setup_popup()
-	# 连接牌堆变化信号
-	GameState.piles_changed.connect(_on_piles_changed)
-	# 初始化显示
-	_update_display()
+	# 如果 battle_state 已设置，更新显示
+	if battle_state:
+		_update_display()
+
+
+## 设置战斗状态
+func set_battle_state(state: BattleState) -> void:
+	battle_state = state
+	if battle_state:
+		battle_state.piles_changed.connect(_on_piles_changed)
+		# 初始化显示
+		_update_display()
 
 
 func _setup_ui() -> void:
@@ -143,6 +154,9 @@ func _hide_popup() -> void:
 
 
 func _refresh_popup_content() -> void:
+	if not battle_state:
+		return
+
 	# 清除现有内容
 	for child in popup_vbox.get_children():
 		child.queue_free()
@@ -150,9 +164,9 @@ func _refresh_popup_content() -> void:
 	# 获取牌列表
 	var cards: Array
 	if pile_type == PileType.DRAW:
-		cards = GameState.draw_pile
+		cards = battle_state.draw_pile
 	else:
-		cards = GameState.discard_pile
+		cards = battle_state.discard_pile
 
 	# 标题
 	var title := Label.new()
@@ -202,10 +216,13 @@ func _on_piles_changed() -> void:
 
 
 func _update_display() -> void:
+	if not battle_state or not count_label:
+		return
+
 	var count: int
 	if pile_type == PileType.DRAW:
-		count = GameState.get_draw_pile_count()
+		count = battle_state.get_draw_pile_count()
 	else:
-		count = GameState.get_discard_pile_count()
+		count = battle_state.get_discard_pile_count()
 
 	count_label.text = str(count)

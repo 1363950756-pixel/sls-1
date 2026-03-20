@@ -15,6 +15,9 @@ const CARD_HEIGHT := 200
 ## 当前显示的卡牌实例
 var card_instances: Array[CardBase] = []
 
+## 战斗状态
+var battle_state: BattleState
+
 ## 目标选择器
 var target_selector: TargetSelector
 
@@ -29,8 +32,15 @@ var enemies_ref: Array[Character] = []
 
 
 func _ready() -> void:
-	GameState.hand_changed.connect(_on_hand_changed)
-	GameState.energy_changed.connect(_on_energy_changed)
+	pass
+
+
+## 设置战斗状态
+func set_battle_state(state: BattleState) -> void:
+	battle_state = state
+	if battle_state:
+		battle_state.hand_changed.connect(_on_hand_changed)
+		battle_state.energy_changed.connect(_on_energy_changed)
 
 
 ## 设置目标选择器
@@ -67,7 +77,7 @@ func _refresh_hand() -> void:
 	card_instances.clear()
 
 	# 创建新的卡牌实例
-	for card_data in GameState.hand:
+	for card_data in battle_state.hand:
 		var card_instance: CardBase = CARD_SCENE.instantiate()
 		add_child(card_instance)
 		card_instance.setup_card(card_data)
@@ -87,7 +97,7 @@ func _refresh_hand() -> void:
 func _update_card_playability() -> void:
 	for card_instance in card_instances:
 		if card_instance.card_data:
-			card_instance.set_playable(GameState.can_play_card(card_instance.card_data))
+			card_instance.set_playable(battle_state.can_play_card(card_instance.card_data))
 
 
 ## 排列卡牌位置（底部居中）
@@ -158,13 +168,13 @@ func _on_card_drag_started(card: CardBase) -> void:
 
 
 ## 卡牌拖拽中
-func _on_card_dragging(card: CardBase, position: Vector2) -> void:
+func _on_card_dragging(_card: CardBase, mouse_pos: Vector2) -> void:
 	if target_selector:
-		target_selector.update_drag(position)
+		target_selector.update_drag(mouse_pos)
 
 
 ## 卡牌拖拽结束
-func _on_card_drag_ended(card: CardBase, position: Vector2) -> void:
+func _on_card_drag_ended(_card: CardBase, _mouse_pos: Vector2) -> void:
 	if target_selector:
 		target_selector.end_drag()
 
@@ -186,12 +196,12 @@ func _try_play_card_on_target(card: CardBase, target: Character) -> void:
 	if not card.card_data:
 		return
 
-	if not GameState.can_play_card(card.card_data):
+	if not battle_state.can_play_card(card.card_data):
 		print("能量不足！")
 		card.return_to_original()
 		return
 
 	# 打出卡牌
-	if GameState.play_card(card.card_data):
+	if battle_state.play_card(card.card_data):
 		print("打出了 %s 指向 %s" % [card.card_data.card_name, target.char_name if target else "自身"])
 		card_played_on_target.emit(card.card_data, target)

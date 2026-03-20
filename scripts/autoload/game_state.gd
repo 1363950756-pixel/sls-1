@@ -1,57 +1,48 @@
-## 全局游戏状态
-## 管理牌组、牌堆、能量等全局数据
+## 全局游戏状态（宏观/战役状态）
+## 管理跨战斗的持久数据：玩家牌组、血量、层数、遗物等
 ## 需要在 项目设置 -> Autoload 中添加为单例
 @warning_ignore("unused_signal")
 extends Node
 
 #region 信号
-## 能量变化信号
-signal energy_changed(current: int, maximum: int)
+## 玩家血量变化信号
+signal player_health_changed(current: int, maximum: int)
 
-## 手牌变化信号
-signal hand_changed()
-
-## 牌堆变化信号（抽牌堆/弃牌堆）
-signal piles_changed()
-
-## 战斗开始信号
-signal battle_started()
-
-## 战斗结束信号
-signal battle_ended(victory: bool)
+## 战斗失败信号
+signal battle_defeat()
 #endregion
 
-#region 牌组相关
-## 完整牌组（战斗开始时的初始牌组）
+#region 玩家基础属性
+## 玩家名称
+var player_name: String = "铁甲战士"
+
+## 最大血量
+var max_hp: int = 80
+
+## 当前血量
+var current_hp: int = 80
+
+## 金币
+var gold: int = 100
+#endregion
+
+#region 牌组
+## 玩家牌组（所有拥有的卡牌）
 var deck: Array[CardData] = []
-
-## 抽牌堆
-var draw_pile: Array[CardData] = []
-
-## 当前手牌
-var hand: Array[CardData] = []
-
-## 弃牌堆
-var discard_pile: Array[CardData] = []
-
-## 消耗牌堆（被移除的牌，本战斗不再出现）
-var exhaust_pile: Array[CardData] = []
 #endregion
 
-#region 能量相关
-## 当前能量
-var current_energy: int = 3
+#region 进度
+## 当前层数
+var current_floor: int = 0
 
-## 最大能量
-var max_energy: int = 3
-#endregion
+## 遗物列表
+var relics: Array = []
 
-#region 战斗状态
-## 回合数
-var turn_count: int = 0
+## 当前地图（二维数组）
+var current_map: Array[Array] = []
 
-## 是否玩家回合
-var is_player_turn: bool = false
+## 当前所在节点
+var current_node: MapNode = null
 #endregion
 
 
@@ -77,125 +68,27 @@ func _init_starter_deck() -> void:
 	deck.append(bash.duplicate())
 
 
-## 开始新战斗
-func start_battle() -> void:
-	# 重置状态
-	turn_count = 0
-	current_energy = max_energy
-	is_player_turn = true
+## 玩家受到伤害
+func player_take_damage(amount: int) -> void:
+	current_hp = max(0, current_hp - amount)
+	player_health_changed.emit(current_hp, max_hp)
 
-	# 清空牌堆
-	draw_pile.clear()
-	hand.clear()
-	discard_pile.clear()
-	exhaust_pile.clear()
-
-	# 复制牌组到抽牌堆
-	for card in deck:
-		draw_pile.append(card.duplicate())
-
-	# 洗牌
-	shuffle_draw_pile()
-
-	battle_started.emit()
-	energy_changed.emit(current_energy, max_energy)
-	piles_changed.emit()
-
-	# 第一回合抽5张牌
-	draw_cards(5)
+	if current_hp <= 0:
+		battle_defeat.emit()
 
 
-## 洗抽牌堆
-func shuffle_draw_pile() -> void:
-	draw_pile.shuffle()
+## 玩家治疗
+func player_heal(amount: int) -> void:
+	current_hp = min(max_hp, current_hp + amount)
+	player_health_changed.emit(current_hp, max_hp)
 
 
-## 从弃牌堆洗回抽牌堆
-func reshuffle_discard_pile() -> void:
-	for card in discard_pile:
-		draw_pile.append(card)
-	discard_pile.clear()
-	shuffle_draw_pile()
-	piles_changed.emit()
-
-
-## 抽牌
-func draw_cards(count: int) -> void:
-	for i in range(count):
-		# 抽牌堆空了，从弃牌堆洗回
-		if draw_pile.is_empty():
-			if discard_pile.is_empty():
-				break  # 没牌可抽了
-			reshuffle_discard_pile()
-
-		if not draw_pile.is_empty():
-			var card: CardData = draw_pile.pop_back()
-			hand.append(card)
-
-	hand_changed.emit()
-	piles_changed.emit()
-
-
-## 打出卡牌
-func play_card(card: CardData) -> bool:
-	# 检查能量是否足够
-	if current_energy < card.cost:
-		print("能量不足！需要 %d，当前 %d" % [card.cost, current_energy])
-		return false
-
-	# 消耗能量
-	current_energy -= card.cost
-	energy_changed.emit(current_energy, max_energy)
-
-	# 从手牌移到弃牌堆
-	hand.erase(card)
-	discard_pile.append(card)
-
-	hand_changed.emit()
-	piles_changed.emit()
-
-	return true
-
-
-## 结束回合
-func end_turn() -> void:
-	# 弃掉所有手牌
-	for card in hand:
-		discard_pile.append(card)
-	hand.clear()
-
-	hand_changed.emit()
-	piles_changed.emit()
-
-
-## 开始新回合
-func start_turn() -> void:
-	turn_count += 1
-	is_player_turn = true
-
-	# 重置能量
-	current_energy = max_energy
-	energy_changed.emit(current_energy, max_energy)
-
-	# 抽5张牌
-	draw_cards(5)
-
-
-## 检查是否有足够能量打出卡牌
-func can_play_card(card: CardData) -> bool:
-	return current_energy >= card.cost
-
-
-## 获取抽牌堆数量
-func get_draw_pile_count() -> int:
-	return draw_pile.size()
-
-
-## 获取弃牌堆数量
-func get_discard_pile_count() -> int:
-	return discard_pile.size()
-
-
-## 获取手牌数量
-func get_hand_count() -> int:
-	return hand.size()
+## 重置玩家状态（新游戏）
+func reset_player() -> void:
+	current_hp = max_hp
+	current_floor = 0
+	gold = 100
+	relics.clear()
+	current_map.clear()
+	current_node = null
+	_init_starter_deck()

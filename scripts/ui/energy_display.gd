@@ -1,16 +1,26 @@
 ## 能量显示UI
 class_name EnergyDisplay extends Control
 
+## 战斗状态
+var battle_state: BattleState
+
 var background: ColorRect
 var energy_label: Label
 
 
 func _ready() -> void:
 	_setup_ui()
-	GameState.energy_changed.connect(_on_energy_changed)
-	# 等待下一帧确保 GameState 已初始化
-	await get_tree().process_frame
-	_update_display(GameState.current_energy, GameState.max_energy)
+	# 如果 battle_state 已设置，更新显示
+	if battle_state:
+		_update_display(battle_state.current_energy, battle_state.max_energy)
+
+
+## 设置战斗状态
+func set_battle_state(state: BattleState) -> void:
+	battle_state = state
+	if battle_state:
+		battle_state.energy_changed.connect(_on_energy_changed)
+		_update_display(battle_state.current_energy, battle_state.max_energy)
 
 
 func _setup_ui() -> void:
@@ -45,6 +55,9 @@ func _on_energy_changed(current: int, maximum: int) -> void:
 
 
 func _update_display(current: int, maximum: int) -> void:
+	if not energy_label:
+		return
+
 	energy_label.text = "%d/%d" % [current, maximum]
 
 	var style: StyleBoxFlat = background.get_theme_stylebox("panel") as StyleBoxFlat

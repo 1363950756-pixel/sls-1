@@ -1,6 +1,9 @@
-## 主场景脚本
-## 整合战斗UI的测试场景
+## 战斗场景脚本
+## 整合战斗UI的场景
 extends Control
+
+## 战斗状态（单场战斗的临时状态）
+var battle_state: BattleState
 
 ## 玩家
 var player: Player
@@ -34,7 +37,7 @@ func _ready() -> void:
 	_setup_battle_field()
 	_setup_ui()
 	_connect_signals()
-	_start_test_battle()
+	_start_battle()
 
 
 ## 设置战斗场地（玩家和敌人）
@@ -59,6 +62,9 @@ func _setup_battle_field() -> void:
 func _setup_ui() -> void:
 	var screen_size: Vector2 = get_viewport_rect().size
 
+	# 创建战斗状态
+	battle_state = BattleState.new()
+
 	# 创建目标选择器
 	target_selector = TargetSelector.new()
 	target_selector.position = Vector2.ZERO
@@ -66,6 +72,7 @@ func _setup_ui() -> void:
 
 	# 创建手牌区域
 	card_hand = CardHand.new()
+	card_hand.set_battle_state(battle_state)
 	card_hand.set_target_selector(target_selector)
 	card_hand.set_player(player)
 	card_hand.set_enemies(_get_character_array())
@@ -73,17 +80,20 @@ func _setup_ui() -> void:
 
 	# 创建能量显示
 	energy_display = EnergyDisplay.new()
+	energy_display.set_battle_state(battle_state)
 	energy_display.position = Vector2(screen_size.x - 100, screen_size.y - 100)
 	add_child(energy_display)
 
 	# 创建抽牌堆显示
 	draw_pile_display = PileDisplay.new()
+	draw_pile_display.set_battle_state(battle_state)
 	draw_pile_display.pile_type = PileDisplay.PileType.DRAW
 	draw_pile_display.position = Vector2(50, screen_size.y - 130)
 	add_child(draw_pile_display)
 
 	# 创建弃牌堆显示
 	discard_pile_display = PileDisplay.new()
+	discard_pile_display.set_battle_state(battle_state)
 	discard_pile_display.pile_type = PileDisplay.PileType.DISCARD
 	discard_pile_display.position = Vector2(screen_size.x - 200, screen_size.y - 130)
 	add_child(discard_pile_display)
@@ -130,10 +140,19 @@ func _get_character_array() -> Array[Character]:
 	return result
 
 
-## 开始测试战斗
-func _start_test_battle() -> void:
+## 开始战斗
+func _start_battle() -> void:
 	status_label.text = "战斗开始！回合 1"
-	GameState.start_battle()
+
+	# 从 GameState 初始化战斗状态
+	battle_state.setup_from_deck(GameState.deck)
+
+	# 发送初始信号
+	battle_state.energy_changed.emit(battle_state.current_energy, battle_state.max_energy)
+	battle_state.piles_changed.emit()
+
+	# 第一回合抽5张牌
+	battle_state.draw_cards(5)
 
 	# 让敌人决定意图
 	for enemy in enemies:
@@ -161,7 +180,7 @@ func _execute_card_effect(card: CardData, target: Character) -> void:
 ## 结束回合
 func _on_end_turn_pressed() -> void:
 	# 弃掉所有手牌
-	GameState.end_turn()
+	battle_state.discard_hand()
 
 	# 玩家护甲重置
 	player.reset_block()
@@ -189,9 +208,9 @@ func _execute_enemy_turn() -> void:
 
 ## 开始新回合
 func _start_new_turn() -> void:
-	GameState.start_turn()
+	battle_state.start_turn()
 	end_turn_button.disabled = false
-	status_label.text = "回合 %d" % GameState.turn_count
+	status_label.text = "回合 %d" % battle_state.turn_count
 
 
 ## 敌人死亡
@@ -208,11 +227,24 @@ func _on_enemy_died(character: Character) -> void:
 				alive_count += 1
 
 		if alive_count == 0:
-			status_label.text = "战斗胜利！"
-			end_turn_button.disabled = true
+			_on_battle_victory()
+
+
+## 战斗胜利
+func _on_battle_victory() -> void:
+	status_label.text = "战斗胜利！"
+	end_turn_button.disabled = true
+
+	# 延迟后返回地图
+	await get_tree().create_timer(1.5).timeout
+	get_tree().change_scene_to_file("res://scenes/map.tscn")
 
 
 ## 玩家死亡
 func _on_player_died(_character: Character) -> void:
 	status_label.text = "战斗失败..."
 	end_turn_button.disabled = true
+
+	# 延迟后返回主菜单
+	await get_tree().create_timer(1.5).timeout
+	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
