@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/cards/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "痛击"
+description = "造成 {damage} 点伤害。"
+cost = 2
+card_type = 0
+target_type = 1
+attack_damage = 12
+block_amount = 0
+card_color = Color(0.6, 0.2, 0.2, 1)

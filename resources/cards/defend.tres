@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/cards/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+card_name = "防御"
+description = "获得 {block} 点格挡。"
+cost = 1
+card_type = 1
+target_type = 0
+attack_damage = 0
+block_amount = 5
+card_color = Color(0.2, 0.4, 0.6, 1)
